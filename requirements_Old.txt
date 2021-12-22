@@ -7,7 +7,7 @@ Pillow==8.4.0
 plotly==5.4.0
 probscale==0.2.5
 scikit_learn==1.0.1
-scipy
+scipy==1.7.3
 seaborn==0.9.0
 streamlit==1.2.0
 
