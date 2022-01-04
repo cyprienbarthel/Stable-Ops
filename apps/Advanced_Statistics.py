@@ -75,7 +75,8 @@ def app():
         # fig_hist = Stab_analyser2.histogram_plot(TS_to_Analyse)
         # st.plotly_chart(fig_hist, use_container_width=True)
         fig_dens = Stab_analyser2.density_plots(TS_to_Analyse)
-        st.pyplot(fig_dens[0], use_container_width=True)  # , stats.norm)#, floc=0)
+        st.markdown(fig_dens)
+        st.pyplot(fig_dens, use_container_width=True)  # , stats.norm)#, floc=0)
 
         law = st.selectbox("Test to Fit a Law", ('Normale', 'Log Normale', 'Chi2', 'Truncated Normale', 'Log Uniform'))
         law = dico_dist[law]

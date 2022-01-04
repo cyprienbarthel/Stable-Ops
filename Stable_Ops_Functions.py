@@ -99,13 +99,13 @@ class StabAnalyser():
 
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(figsize=(20, 10), nrows=2, ncols=2)
 
-        fig = s.plot.density(ax=ax1)
+        s.plot.density(ax=ax1)
 
-        fig = probscale.probplot(s, plottype='pp', ax=ax2,
+        probscale.probplot(s, plottype='pp', ax=ax2,
                                  problabel='Percentiles', **common_opts)
-        fig = probscale.probplot(s, plottype='prob', ax=ax3,
+        probscale.probplot(s, plottype='prob', ax=ax3,
                                  problabel='Normal Probabilities', **common_opts)
-        fig = probscale.probplot(s, plottype='prob', ax=ax4,
+        probscale.probplot(s, plottype='prob', ax=ax4,
                                  problabel='Normal Probabilities', probax='y', datascale='log',
                                  datalabel='Log Task Time', scatter_kws=dict(marker='.', linestyle='none'),
                                  bestfit=True, estimate_ci=True,

@@ -17,7 +17,7 @@ import plotly.express as px
 
 def plot_confusion_matrix(y_true, y_pred, class_names, normalize=None,
                           title='Confusion Matrix', plot_numbers=True, display_names=None,
-                          figsize=(7, 9)):
+                          figsize=(7, 7)):
 
     cm = confusion_matrix(y_true, y_pred, labels=class_names)
 
@@ -102,7 +102,6 @@ def app():
         ix = argmax(score)
         st.markdown('Best Threshold=%f, Score=%.3f' % (thresholds[ix], score[ix]))
         y_pred2 = [1 if x >= thresholds[ix] else 0 for x in list(y_probas)]
-        st.write(y_pred2)
 
         col1, col2 = st.columns(2)
         with col1:
