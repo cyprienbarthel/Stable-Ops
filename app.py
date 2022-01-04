@@ -6,11 +6,11 @@ import pandas as pd
 import shared_dataset
 
 app = MultiApp()
-#col1, col2, col3 = st.columns(3)
-#with col1:
-#    st.image('Data Files\IRIS_LOGO.PNG')
-#with col3:
-#    st.image('Data Files\OVH_Logo.PNG')
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.image('Data Files\IRIS_LOGO.PNG')
+with col3:
+    st.image('Data Files\OVH_Logo.PNG')
 
 st.markdown("""
 ## Operations Stability
@@ -39,7 +39,7 @@ if df_path is not None:
     shared_dataset.carac_dataset = df_carac
 
 # Add all your application here
-#app.add_app("Home Page - Upload Data", home.app)
+app.add_app("Home Page - Upload Data", home.app)
 app.add_app("Construct Times Table", Construct_Times_Table.app)
 app.add_app("Advanced Statistics", Advanced_Statistics.app)
 app.add_app("Find delays causes with subgroups analysis", Causes_Finder_Obs.app)
