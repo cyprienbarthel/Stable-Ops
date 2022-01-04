@@ -17,7 +17,7 @@ import plotly.express as px
 
 def plot_confusion_matrix(y_true, y_pred, class_names, normalize=None,
                           title='Confusion Matrix', plot_numbers=True, display_names=None,
-                          figsize=(7, 7)):
+                          figsize=(5, 5)):
 
     cm = confusion_matrix(y_true, y_pred, labels=class_names)
 
@@ -40,12 +40,12 @@ def app():
     st.write('### Causes Finder 3 : Machine Learning Model for Detecting Outliers')
     df = all_data_merged.fillna(0)
 
-    target = st.multiselect("Select Target Time to Analyse", time_cols)
-    quantile = st.slider("Select the quantile that defines an outlier", min_value=0.75, max_value=0.99, value=0.9,
+    target = st.sidebar.multiselect("Select Target Time to Analyse", time_cols)
+    quantile = st.sidebar.slider("Select the quantile that defines an outlier", min_value=0.75, max_value=0.99, value=0.9,
                          step=0.01)
     choices = list(set.union({'- Select All'}, possibles_groups))
-    features = st.multiselect("Possible Causes (features of ML model)", choices)
-    if (len(features) > 0) and (len(target) >0):
+    features = st.sidebar.multiselect("Possible Causes (features of ML model)", choices)
+    if (len(features) > 0) and (len(target) > 0):
         target = target[0]
         if (features[0] == '- Select All') :
             features = list(possibles_groups)

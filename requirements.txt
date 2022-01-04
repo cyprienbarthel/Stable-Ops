@@ -11,3 +11,4 @@ scipy
 seaborn==0.9.0
 streamlit==1.2.0
 openpyxl
+pygraphviz
