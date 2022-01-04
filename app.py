@@ -6,11 +6,11 @@ import pandas as pd
 import shared_dataset
 
 app = MultiApp()
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.image('Data Files\IRIS_LOGO.PNG')
-with col3:
-    st.image('Data Files\OVH_Logo.PNG')
+#col1, col2, col3 = st.columns(3)
+#with col1:
+#    st.image('Data Files\IRIS_LOGO.PNG')
+#with col3:
+#    st.image('Data Files\OVH_Logo.PNG')
 
 st.markdown("""
 ## Operations Stability
