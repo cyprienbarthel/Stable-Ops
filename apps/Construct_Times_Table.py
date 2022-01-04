@@ -18,6 +18,8 @@ def app():
     st.write('')
     #df = upload_data()
     df = shared_dataset.input_dataset
+    df_carac = shared_dataset.carac_dataset #pd.read_excel('Data Files\Data_OVH_2.xlsx', sheet_name=1)  #### Path changer
+    st.markdown('Input Table ⬇️')
     st.dataframe(df)
     start_date = st.sidebar.date_input('start date', date(2021, 7, 1))
     start_date = pd.to_datetime(start_date)
@@ -90,7 +92,7 @@ def app():
 
 
     df_pivoted['OF is ordered'] = df_pivoted.apply(check_order, axis=1)
-    st.dataframe(df_pivoted['OF is ordered'].value_counts())
+    #st.dataframe(df_pivoted['OF is ordered'].value_counts())
 
     filter = st.sidebar.selectbox(
         'Filter only properly ordered OF?',
@@ -167,179 +169,23 @@ def app():
     st.write('')
     st.write('')
 
-    st.write('### Basics Statistics')
 
-
-    #st.write('###### Mean of Time Variables')
-    df_mean = df_times.mean().to_frame().reset_index().rename(columns={'index': 'Times', 0: 'Mean'})
-    fig = px.bar(df_mean, x='Times', y='Mean', color='Mean', height=400)
-    #st.plotly_chart(fig, use_container_width=True)
-
-    st.write('###### Mean and Median of Time Variables')
-    df_median = df_times.median().to_frame().reset_index().rename(columns={'index': 'Times', 0: 'Median'})
-    fig2 = px.bar(df_median, x='Times', y='Median', color='Median', height=400)
-    #st.plotly_chart(fig, use_container_width=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        st.plotly_chart(fig2, use_container_width=True)
-
-    st.write('###### Standard Deviation of Time Variables')
-    df_std = df_times.std().to_frame().reset_index().rename(columns={'index':'Times', 0:'Standard Deviation'})
-    fig = px.bar(df_std, x='Times', y='Standard Deviation', color='Standard Deviation', height=400)
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.write('###### Autocorrelation between Time Variables')
-
-    time_cols_without_totals = []
-    prod_time_cols = []
-    for i in time_cols:
-        if 'Total' not in i:
-            time_cols_without_totals.append(i)
-            if 'Log' not in i: #### A changer pour généraliser
-                prod_time_cols.append(i)
-
-    fig = px.imshow(df_times[time_cols_without_totals].corr())
-    st.plotly_chart(fig, use_container_width=True)
-    _cov_perc = round(abs(df_times[prod_time_cols].var().sum() - \
-                          df_times['Total Time Prod'].var()) / df_times['Total Time Prod'].var() * 100, 1)
-
-    st.markdown(f"Covariance part of Prod Variance is {_cov_perc}%")
-
-
-    st.write(' ')
-    st.write('')
-    st.write('### Statistical Distribution of Time Variables')
-
-    TS_to_Analyse = st.multiselect("Select Time to Analyse", time_cols + ['Total Time'])
-
-    dico_dist = {'Normale': norm, 'Log Normale': lognorm, 'Chi2': chi2, 'Truncated Normale': truncnorm,
-                 'Log Uniform': loguniform}
-
-    if len(TS_to_Analyse) > 0:
-        Stab_analyser2 = StabAnalyser(all_data)
-        TS_to_Analyse = TS_to_Analyse[0]
-        # fig_hist = Stab_analyser2.histogram_plot(TS_to_Analyse)
-        # st.plotly_chart(fig_hist, use_container_width=True)
-        fig_dens = Stab_analyser2.density_plots(TS_to_Analyse)
-        st.pyplot(fig_dens[0], use_container_width=True)  # , stats.norm)#, floc=0)
-
-        law = st.selectbox("Test to Fit a Law", ('Normale', 'Log Normale', 'Chi2', 'Truncated Normale', 'Log Uniform'))
-        law = dico_dist[law]
-        if st.button('Fit Distribution'):
-
-            fig1, fig2, squared_estimate_errors, aic, dist_params = Stab_analyser2.fit_stat_law(TS_to_Analyse, law)
-            col1, col2 = st.columns(2)
-            with col1:
-                st.pyplot(fig1, use_container_width=True)
-            with col2:
-                st.pyplot(fig2, use_container_width=True)
-
-            st.markdown(f'AIC {aic}')
-            st.markdown(f'RMSE {squared_estimate_errors}')
-            st.dataframe(pd.DataFrame.from_dict(dist_params).rename(columns={0:'Params'}))
-
-
-
-    df_carac = pd.read_excel('Data Files\Data_OVH_2.xlsx', sheet_name=1) #### Path changer
     c_to_str = list(set(df_carac.columns.to_list()) - set(['OF']))
-    df_carac[c_to_str ] = df_carac[c_to_str ].applymap(str)
-    all_data_merged = all_data.merge(df_carac, on = 'OF', how = 'left')
-
-
-
+    df_carac[c_to_str] = df_carac[c_to_str].applymap(str)
+    all_data_merged = all_data.merge(df_carac, on='OF', how='left')
 
     ### Add Times Attributes
     all_data_merged['Start Week Day'] = all_data_merged['Start|OF'].apply(lambda x: x.weekday()).replace(
         {0: '1.Lundi', 1: '2.Mardi', 2: '3.Mercredi', 3: '4.Jeudi', 4: '5.Vendredi', 5: '6.Samedi'})
     all_data_merged['Start Hour'] = all_data_merged['Start|OF'].apply(lambda x: str(x.hour))
 
-    #df['Task Time'] = df.apply(lambda df: get_actual_exec_time(df[f'End'],df[f'Start']),axis=1)
+    shared_dataset.all_data = all_data
+    shared_dataset.all_data_merged = all_data_merged
+    shared_dataset.df_times = df_times
+    shared_dataset.time_cols = time_cols
+    shared_dataset.dates_col = dates_col
+    shared_dataset.waiting_time_cols = waiting_time_cols
 
-    ### Initiate StabAnalyser
-
-    st.write(' ')
-    st.write('')
-    st.write('### Causes Finder 1 : Analyse of Tasks Times Distribution by groups')
-
-    Stab_analyser = StabAnalyser(all_data_merged)
-
-    #time_variable = st.select("Time Variable to analyse", time_cols)
-
-    target = st.multiselect("Select Target Time to analyse", time_cols)
-    possibles_groups = set.union(set(df_carac.columns.to_list()),set(['Start Week Day','Start Hour']))- set(['OF'])
-    group_variable = st.multiselect("Select Grouping Column to analyse statistical differences", possibles_groups)
-    int_val = st.slider('Max value of histograms', min_value=0, max_value=100, value=30, step=2)
-    bin_size = st.slider('Bin size of density Histogram', min_value=0.1, max_value=5.0, value=0.2, step=0.1)
-    if (len(group_variable) > 0) and  (len(target) > 0):
-        group_variable = group_variable[0]
-        target = target[0]
-        st.write(group_variable)
-        fig1, fig2, hist, group = Stab_analyser.group_analyser(group_variable, target, int_val, bin_size)
-        st.plotly_chart(fig2, use_container_width=True)
-        st.plotly_chart(fig1, use_container_width=True)
-
-    else:
-        pass
-
-    st.write(' ')
-    st.write('')
-    st.write('### Causes Finder 2 : Causal Model')
-
-    all_data_merged = all_data_merged.fillna(0)
-    all_data_merged.to_excel('All_Data_Merged.xlsx')
-    causal_analyser = CausalAnalyser(all_data_merged)
-    target2 = st.multiselect("Select Target Time to Analyse", time_cols)
-    causes_VA = st.multiselect("Possible Causes", possibles_groups)
-    tabu_child = st.multiselect("Nodes that are not a consequence", possibles_groups)
-
-    if len(causes_VA) > 1 and (len(target2) > 0):
-        st.write("Computing Bayesian Network")
-        target2 = target2[0]
-        error = True
-        edge_value_tresh = 0
-        number_of_try = 0
-        #while error & (number_of_try < 10):
-        try:
-            fig, ie, probas = causal_analyser.causes_finder(
-                features=causes_VA,
-                target=target2, edge_value_tresh=edge_value_tresh,
-                tabu_child_nodes=tabu_child)
-            error = False
-            st.pyplot(fig)#, use_container_width=True)
-            st.table(probas.transpose().reset_index().head())
-            error = False
-            #except:
-            #    edge_value_tresh = edge_value_tresh + 0.05
-            #    number_of_try = number_of_try + 1
-        except:
-        #if error:
-            causal_analyser2 = CausalAnalyser_v2(all_data_merged)
-            fig, ie, probas = causal_analyser2.causes_finder2(
-                features=causes_VA,
-                target=target2, edge_value_tresh=edge_value_tresh,
-                tabu_child_nodes=tabu_child)
-
-
-
-            s2 = probas.transpose().reset_index().head()
-            st.pyplot(fig)#, use_container_width=True)
-            st.table(s2)
-            #st.write('Bayesian Network could not fit the Data')
-
-    st.write(' ')
-    st.write('')
-    st.write('### ML Classification Model to explain Anomalies')
-
-
-
-
-
-
-
-
-
-
-
+    st.markdown('Output Table ⬇️')
+    st.dataframe(all_data_merged)
+    st.markdown('✅ Output Table is saved')

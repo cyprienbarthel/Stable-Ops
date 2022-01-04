@@ -1,6 +1,7 @@
 import streamlit as st
 from multiapp import MultiApp
-from apps import home, Ordered_Production_Data_Analysis # import your app modules here
+from apps import home, Ordered_Production_Data_Analysis, Construct_Times_Table,\
+    Advanced_Statistics, Causes_Finder_Obs, Causes_Finder_Causal_Nex, Causes_Finder_ML_Model # import your app modules here
 import pandas as pd
 import shared_dataset
 
@@ -12,7 +13,7 @@ app = MultiApp()
 #    st.image('Data Files\OVH_Logo.PNG')
 
 st.markdown("""
-## Operations Stability Analysis
+## Operations Stability
 ###### 🚀 Data Visualization App made by [@Iris by Argon&Co] (https://www.irisbyargonandco.com/fr/)
 """)
 st.markdown(" ")
@@ -27,16 +28,22 @@ st.markdown('###### 🧐 Select an Analysis')
 def upload_data():
     #df = pd.read_excel(df_path, skiprows=1,sheet_name=0)
     df = pd.read_excel('Data Files\Data_OVH_2.xlsx', skiprows=1, sheet_name=0)
-    return df
+    df_carac = pd.read_excel('Data Files\Data_OVH_2.xlsx', sheet_name=1)
+    return df, df_carac
 
 if df_path is None:
     global df2
-    df2 = upload_data()
-    shared_dataset.input_dataset = df2
+    df, df_carac = upload_data()
+    shared_dataset.input_dataset = df
+    shared_dataset.carac_dataset = df_carac
 
 # Add all your application here
 app.add_app("Home Page - Upload Data", home.app)
-app.add_app("Supposedly Ordered Production Data", Ordered_Production_Data_Analysis.app)
+app.add_app("Construct Times Table", Construct_Times_Table.app)
+app.add_app("Advanced Statistics", Advanced_Statistics.app)
+app.add_app("Find delays causes with subgroups analysis", Causes_Finder_Obs.app)
+app.add_app("Find delays causes with bayesian networks (Causal Nex)", Causes_Finder_Causal_Nex.app)
+app.add_app("Find delays causes with ML Classification Models", Causes_Finder_ML_Model.app)
 
 # The main app
 app.run()
