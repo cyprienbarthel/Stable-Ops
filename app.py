@@ -26,20 +26,20 @@ st.markdown('###### 🧐 Select an Analysis')
 
 # @st.cache(suppress_st_warning=True)
 def upload_data():
-    df = pd.read_excel(df_path, skiprows=1,sheet_name=0)
-    df_carac = pd.read_excel(df_path, sheet_name=1)
+    df = pd.read_excel(df_path, skiprows=1, sheet_name=0)
+    df_carac = 1#pd.read_excel(df_path, sheet_name=1)
     #df = pd.read_excel('Data Files\Data_OVH_2.xlsx', skiprows=1, sheet_name=0)
     #df_carac = pd.read_excel('Data Files\Data_OVH_2.xlsx', sheet_name=1)
     return df, df_carac
 
-if df_path is None:
+if df_path is not None:
     global df2
     df, df_carac = upload_data()
     shared_dataset.input_dataset = df
     shared_dataset.carac_dataset = df_carac
 
 # Add all your application here
-app.add_app("Home Page - Upload Data", home.app)
+#app.add_app("Home Page - Upload Data", home.app)
 app.add_app("Construct Times Table", Construct_Times_Table.app)
 app.add_app("Advanced Statistics", Advanced_Statistics.app)
 app.add_app("Find delays causes with subgroups analysis", Causes_Finder_Obs.app)
