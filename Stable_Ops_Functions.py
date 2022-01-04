@@ -21,6 +21,10 @@ from causalnex.discretiser import Discretiser
 from causalnex.network import BayesianNetwork
 from causalnex.discretiser.discretiser_strategy import DecisionTreeSupervisedDiscretiserMethod
 from causalnex.inference import InferenceEngine
+from causalnex.structure import DAGRegressor
+
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
 
 
 
@@ -44,12 +48,17 @@ class StabAnalyser():
         data_to_use = self.data.copy()
         data_to_use = data_to_use[(data_to_use[val_col] < high_limit) & (data_to_use[val_col] > 0)]
 
+
         if group_col == group_col:
+            data_to_use = data_to_use[~data_to_use[group_col].isna()]
             data_to_use[group_col] = data_to_use[group_col].apply(str)
             tmp = data_to_use.groupby(group_col).agg({val_col:list})
             tmp = tmp.reset_index()
+            tmp['len'] = tmp[val_col].apply(len)
+            tmp = tmp[tmp['len'] > 10]
             hist_data = tmp[val_col].values.tolist()
-            group_labels = tmp[group_col] # name of the dataset
+            group_labels = tmp[group_col].values.tolist() # name of the datasets
+            #try:
             fig1 = ff.create_distplot(hist_data, group_labels, bin_size=bin_size)
             print('ok')
             fig2 = px.box(data_to_use, x=val_col, y=group_col, color = group_col,
@@ -66,7 +75,7 @@ class StabAnalyser():
             fig1 = ff.create_distplot(hist_data, group_labels, bin_size=bin_size)
             fig2 = px.box(data_to_use, x=val_col)
 
-        return fig1, fig2
+        return fig1, fig2,hist_data,group_labels
 
     def group_scatter(self, group_col, val_col, y_axis):
         fig = px.scatter(self.data, x=val_col, y=y_axis, facet_col=group_col, trendline="ols")
@@ -145,6 +154,7 @@ class StabAnalyser():
         x = np.linspace(s.min(),s.max())
         ax2.plot(x, dist_.cdf(x) * 100,
                 'r-', lw=5, alpha=0.6, label='norm pdf')
+
         plt.title('Probability Plot Fit')
         #plt.show()
         return fig, fig2, squared_estimate_errors, aic, dist_params
@@ -157,12 +167,11 @@ class CausalAnalyser():
 
     def causes_finder(self, features, target, edge_value_tresh = 0, tabu_child_nodes=None):
 
-
         tmp0 = self.data
-        tmp0.columns = [i.replace(' ', '_').replace('é','e') for i in tmp0.columns] ##
-        features = [i.replace(' ', '_').replace('é','e') for i in features] ##
-        target = target.replace(' ', '_').replace('é','e')
-        tabu_child_nodes = [i.replace(' ', '_').replace('é','e') for i in tabu_child_nodes] ##
+        tmp0.columns = [i.replace(' ', '_').replace('é', 'e').replace('-', '_') for i in tmp0.columns]  ##
+        features = [i.replace(' ', '_').replace('é', 'e').replace('-', '_') for i in features]  ##
+        target = target.replace(' ', '_').replace('é', 'e').replace('-', '_')
+        tabu_child_nodes = [i.replace(' ', '_').replace('é', 'e').replace('-', '_') for i in tabu_child_nodes]  ##
 
         X, y = tmp0[features], tmp0[target]
 
@@ -232,3 +241,171 @@ class CausalAnalyser():
 
 
         return fig, ie,probas_table
+
+
+class CausalAnalyser_v2():
+
+    def __init__(self, data0):
+        self.data = data0
+
+    def causes_finder(self, features, target, edge_value_tresh = 0, tabu_child_nodes=None):
+
+
+        tmp0 = self.data
+        tmp0.columns = [i.replace(' ', '_').replace('é','e').replace('-','_') for i in tmp0.columns] ##
+        features = [i.replace(' ', '_').replace('é','e').replace('-', '_') for i in features] ##
+        target = target.replace(' ', '_').replace('é','e').replace('-', '_')
+        tabu_child_nodes = [i.replace(' ', '_').replace('é','e').replace('-', '_') for i in tabu_child_nodes] ##
+
+        #X, y = tmp0[features], tmp0[target]
+
+        data = tmp0[features + [target]].rename(columns={target: 'target'})
+
+
+        ## Encode Categorical for Structure Learning
+        struct_data = data.copy()
+        non_numeric_columns = list(struct_data.select_dtypes(exclude=[np.number]).columns)
+        le = LabelEncoder()
+        for col in non_numeric_columns:
+            struct_data[col] = le.fit_transform(struct_data[col])
+
+        ## Learn Structure
+        sm = from_pandas(struct_data, tabu_parent_nodes=['target'], tabu_child_nodes=tabu_child_nodes)
+        sm.remove_edges_below_threshold(edge_value_tresh)
+        fig, ax = plt.subplots(figsize=(20, 10))
+        nx.draw_networkx(sm, ax=ax)
+        fig.show()
+
+        sm = sm.get_largest_subgraph()
+
+        ## Discretize for Probabilities Learning
+        tree_discretiser = DecisionTreeSupervisedDiscretiserMethod(mode="single", tree_params={"max_depth": 2,
+                                                                                               "random_state": 2021})
+
+
+        tresh = 10  # Treshold of number of disctinct value for treshold
+        features_to_discret = list(self.data[features].nunique().to_frame().rename({0: 'v'},
+                                                                                   axis=1).query('v > @tresh').index)
+
+        data[features_to_discret] = data[features_to_discret].applymap(float)
+
+        tree_discretiser.fit(
+            feat_names=features_to_discret,
+            dataframe=data[features_to_discret + ['target']],
+            target_continuous=True,
+            target="target",
+        )
+
+        data_for_proba = data.copy()
+        for col in features:
+            if col in features_to_discret:
+                data_for_proba[col] = tree_discretiser.transform(data[[col]])
+
+        # Discretize Target
+
+        nb_target_group = 20
+        splits = list(np.linspace(data_for_proba["target"].min(), data_for_proba["target"].max(), nb_target_group))
+        data_for_proba["target"] = Discretiser(method="fixed",
+                                               numeric_split_points=splits).transform(data["target"])
+
+        map_disc1 = tree_discretiser.map_thresholds
+
+        bn = BayesianNetwork(sm)
+
+        bn = bn.fit_node_states(data_for_proba)
+        bn = bn.fit_cpds(data_for_proba, method="BayesianEstimator", bayes_prior="K2")
+
+        print('Conditional Probabilities')
+        probas_table = bn.cpds['target']
+
+        ie = InferenceEngine(bn)
+
+        ## Check Overfitting
+        train, test = train_test_split(data_for_proba, train_size=0.9, test_size=0.1, random_state=7)
+
+
+        return fig, ie, probas_table
+
+
+    def causes_finder2(self, features, target, edge_value_tresh = 0, tabu_child_nodes=None):
+
+        ### Data has to be continuous
+
+        reg = DAGRegressor(
+            alpha=0.1,
+            beta=0.9,
+            hidden_layer_units=None,
+            dependent_target=True,
+            enforce_dag=True,
+        )
+
+        tmp0 = self.data
+        tmp0.columns = [i.replace(' ', '_').replace('é', 'e') for i in tmp0.columns]  ##
+        features = [i.replace(' ', '_').replace('é', 'e') for i in features]  ##
+        target = target.replace(' ', '_').replace('é', 'e')
+        #tabu_child_nodes = [i.replace(' ', '_').replace('é', 'e') for i in tabu_child_nodes]  ##
+
+        #X, y = tmp0[features], tmp0[target]
+
+        data = tmp0[features + [target]].rename(columns={target: 'target'})
+
+        ## Encode Categorical for Structure Learning with DAG Regressor
+        struct_data = data.copy()
+        non_numeric_columns = list(struct_data.select_dtypes(exclude=[np.number]).columns)
+        le = LabelEncoder()
+        for col in non_numeric_columns:
+            struct_data[col] = le.fit_transform(struct_data[col])
+
+
+        scores = cross_val_score(reg, struct_data[features], struct_data['target'],
+                                 cv=KFold(shuffle=True, random_state=42))
+        print(f'MEAN R2: {np.mean(scores).mean():.3f}')
+
+        X = struct_data[features]
+        y = struct_data['target']
+        reg.fit(X, y)
+        print(pd.Series(reg.coef_, index=features))
+        graph = reg.plot_dag()
+        fig, ax = plt.subplots()
+        nx.draw_networkx(graph, ax=ax)
+
+
+        ## Discretize for Probabilities Learning
+        tree_discretiser = DecisionTreeSupervisedDiscretiserMethod(mode="single", tree_params={"max_depth": 2,
+                                                                                               "random_state": 2021})
+
+        tresh = 10  # Treshold of number of disctinct value for treshold
+        features_to_discret = list(self.data[features].nunique().to_frame().rename({0: 'v'},
+                                                                                   axis=1).query('v > @tresh').index)
+
+        data[features_to_discret] = data[features_to_discret].applymap(float)
+
+        tree_discretiser.fit(
+            feat_names=features_to_discret,
+            dataframe=data[features_to_discret + ['target']],
+            target_continuous=True,
+            target="target",
+        )
+
+        data_for_proba = data.copy()
+        for col in features:
+            if col in features_to_discret:
+                data_for_proba[col] = tree_discretiser.transform(data[[col]])
+
+        # Discretize Target
+
+        nb_target_group = 20
+        splits = list(np.linspace(data_for_proba["target"].min(), data_for_proba["target"].max(), nb_target_group))
+        data_for_proba["target"] = Discretiser(method="fixed",
+                                               numeric_split_points=splits).transform(data["target"])
+
+
+        bn = BayesianNetwork(graph)
+        bn = bn.fit_node_states(data_for_proba)
+        # train = train.applymap(str)
+        bn = bn.fit_cpds(data_for_proba, method="BayesianEstimator", bayes_prior="K2")
+        ie = InferenceEngine(bn)
+
+        probas_table = bn.cpds['target']
+
+        return fig, ie, probas_table
