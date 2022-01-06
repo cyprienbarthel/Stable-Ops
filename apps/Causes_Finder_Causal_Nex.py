@@ -1,5 +1,5 @@
 import streamlit as st
-
+import seaborn as sns
 import shared_dataset
 import sys
 sys.path.append('.')
@@ -41,19 +41,21 @@ def app():
             #    edge_value_tresh = edge_value_tresh + 0.05
             #    number_of_try = number_of_try + 1
         except:
-        #if error:
+        #if error with use the DAG Regressor to find the structure tree
             causal_analyser2 = CausalAnalyser_v2(all_data_merged)
-            fig, ie, probas = causal_analyser2.causes_finder2(
+            fig, ie, probas, probas_table_rescale = causal_analyser2.causes_finder2(
                 features=causes_VA,
                 target=target2, edge_value_tresh=edge_value_tresh,
                 tabu_child_nodes=tabu_child)
 
 
-
-            s2 = probas.transpose().reset_index().head()
+            s2 = probas.reset_index()
             st.pyplot(fig, height=10)#, use_container_width=True)
             st.markdown(" **Conditional Probabilities Table**  ⬇️")
-            st.table(s2)
+
+            cm = sns.light_palette("red", as_cmap=True)
+            st.dataframe(s2.style.background_gradient(cmap=cm, low=.5, high=0).highlight_null('red'))
+            #st.table(s2)
             #st.write('Bayesian Network could not fit the Data')
 
     st.write(' ')

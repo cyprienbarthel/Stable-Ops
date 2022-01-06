@@ -14,9 +14,6 @@ def app():
     st.write('### Causes Finder 1 : Analyse Subgroups Statistics')
 
     Stab_analyser = StabAnalyser(all_data_merged)
-
-    #time_variable = st.select("Time Variable to analyse", time_cols)
-
     target = st.multiselect("Select Target Time to analyse", time_cols)
     possibles_groups = set.union(set(df_carac.columns.to_list()),set(['Start Week Day','Start Hour']))- set(['OF'])
     group_variable = st.multiselect("Select Grouping Column to analyse statistical differences", possibles_groups)

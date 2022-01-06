@@ -219,95 +219,26 @@ class CausalAnalyser():
 
         # Discretize Target
 
-        nb_target_group = 20
-        splits = list(np.linspace(data_for_proba["target"].min(), data_for_proba["target"].max(), nb_target_group))
-        data_for_proba["target"] = Discretiser(method="fixed",
-                                               numeric_split_points=splits).transform(data["target"])
+        #nb_target_group = 20
+        #splits = list(np.linspace(data_for_proba["target"].min(), data_for_proba["target"].max(), nb_target_group))
+        #data_for_proba["target"] = Discretiser(method="fixed",
+        #                                       numeric_split_points=splits).transform(data["target"])
 
-        map_disc1 = tree_discretiser.map_thresholds
+        quantile_1 = 0.9
+        quantile_2 = 0.75
 
-        bn = BayesianNetwork(sm)
+        q1 = data_for_proba["target"].quantile(quantile_1)
+        q2 = data_for_proba["target"].quantile(quantile_2)
 
-        bn = bn.fit_node_states(data_for_proba)
-        bn = bn.fit_cpds(data_for_proba, method="BayesianEstimator", bayes_prior="K2")
+        def f(x):
+            if x <= q1:
+                return 'Normal'
+            elif x <= q2:
+                return 'Quantile 0.75 - 0.9'
+            else:
+                return 'Quantile 0.9 - 1'
 
-        print('Conditional Probabilities')
-        probas_table = bn.cpds['target']
-
-        ie = InferenceEngine(bn)
-
-        ## Check Overfitting
-        train, test = train_test_split(data_for_proba, train_size=0.9, test_size=0.1, random_state=7)
-
-
-        return fig, ie,probas_table
-
-
-class CausalAnalyser_v2():
-
-    def __init__(self, data0):
-        self.data = data0
-
-    def causes_finder(self, features, target, edge_value_tresh = 0, tabu_child_nodes=None):
-
-
-        tmp0 = self.data
-        tmp0.columns = [i.replace(' ', '_').replace('é','e').replace('-','_') for i in tmp0.columns] ##
-        features = [i.replace(' ', '_').replace('é','e').replace('-', '_') for i in features] ##
-        target = target.replace(' ', '_').replace('é','e').replace('-', '_')
-        tabu_child_nodes = [i.replace(' ', '_').replace('é','e').replace('-', '_') for i in tabu_child_nodes] ##
-
-        #X, y = tmp0[features], tmp0[target]
-
-        data = tmp0[features + [target]].rename(columns={target: 'target'})
-
-
-        ## Encode Categorical for Structure Learning
-        struct_data = data.copy()
-        non_numeric_columns = list(struct_data.select_dtypes(exclude=[np.number]).columns)
-        le = LabelEncoder()
-        for col in non_numeric_columns:
-            struct_data[col] = le.fit_transform(struct_data[col])
-
-        ## Learn Structure
-        sm = from_pandas(struct_data, tabu_parent_nodes=['target'], tabu_child_nodes=tabu_child_nodes)
-        sm.remove_edges_below_threshold(edge_value_tresh)
-        fig, ax = plt.subplots(figsize=(20, 10))
-        nx.draw_networkx(sm, ax=ax)
-        fig.show()
-
-        sm = sm.get_largest_subgraph()
-
-        ## Discretize for Probabilities Learning
-        tree_discretiser = DecisionTreeSupervisedDiscretiserMethod(mode="single", tree_params={"max_depth": 2,
-                                                                                               "random_state": 2021})
-
-
-        tresh = 10  # Treshold of number of disctinct value for treshold
-        features_to_discret = list(self.data[features].nunique().to_frame().rename({0: 'v'},
-                                                                                   axis=1).query('v > @tresh').index)
-
-        data[features_to_discret] = data[features_to_discret].applymap(float)
-
-        tree_discretiser.fit(
-            feat_names=features_to_discret,
-            dataframe=data[features_to_discret + ['target']],
-            target_continuous=True,
-            target="target",
-        )
-
-        data_for_proba = data.copy()
-        for col in features:
-            if col in features_to_discret:
-                data_for_proba[col] = tree_discretiser.transform(data[[col]])
-
-        # Discretize Target
-
-        nb_target_group = 20
-        splits = list(np.linspace(data_for_proba["target"].min(), data_for_proba["target"].max(), nb_target_group))
-        data_for_proba["target"] = Discretiser(method="fixed",
-                                               numeric_split_points=splits).transform(data["target"])
-
+        data_for_proba["target"] = data_for_proba["target"].apply(f)
         map_disc1 = tree_discretiser.map_thresholds
 
         bn = BayesianNetwork(sm)
@@ -325,6 +256,12 @@ class CausalAnalyser_v2():
 
 
         return fig, ie, probas_table
+
+
+class CausalAnalyser_v2():
+
+    def __init__(self, data0):
+        self.data = data0
 
 
     def causes_finder2(self, features, target, edge_value_tresh = 0, tabu_child_nodes=None):
@@ -371,7 +308,7 @@ class CausalAnalyser_v2():
 
 
         ## Discretize for Probabilities Learning
-        tree_discretiser = DecisionTreeSupervisedDiscretiserMethod(mode="single", tree_params={"max_depth": 2,
+        tree_discretiser = DecisionTreeSupervisedDiscretiserMethod(mode="single", tree_params={"max_depth": 3,
                                                                                                "random_state": 2021})
 
         tresh = 10  # Treshold of number of disctinct value for treshold
@@ -388,17 +325,49 @@ class CausalAnalyser_v2():
         )
 
         data_for_proba = data.copy()
+
         for col in features:
             if col in features_to_discret:
+                #print(data_for_proba[col].head())
                 data_for_proba[col] = tree_discretiser.transform(data[[col]])
+                #print(data_for_proba[col].head())
+
+        def bound_name(x, bound):
+            a = bound[x]
+            b = bound[x+1]
+            return f"g{x} ( {a} - {b} )"
+
+        for col in features_to_discret:
+
+            bounds = list(tree_discretiser.map_thresholds[col])
+            bounds.insert(0, 0)
+            bounds.append(np.inf)
+
+            data_for_proba[col] = data_for_proba[col].apply(lambda x : bound_name(x, bounds))
 
         # Discretize Target
 
-        nb_target_group = 20
-        splits = list(np.linspace(data_for_proba["target"].min(), data_for_proba["target"].max(), nb_target_group))
-        data_for_proba["target"] = Discretiser(method="fixed",
-                                               numeric_split_points=splits).transform(data["target"])
+        #nb_target_group = 20
+        #splits = list(np.linspace(data_for_proba["target"].min(), data_for_proba["target"].max(), nb_target_group))
+        #data_for_proba["target"] = Discretiser(method="fixed",
+        #                                       numeric_split_points=splits).transform(data["target"])
 
+        quantile_1 = 0.7
+        quantile_2 = 0.9
+
+
+        q1 = round(data_for_proba["target"].quantile(quantile_1), 1)
+        q2 = round(data_for_proba["target"].quantile(quantile_2), 1)
+
+        def f(x):
+            if x <= q1:
+                return f'Quantile 0 - 0.7 ( 0 - {q1} )'
+            elif x <= q2:
+                return f'Quantile 0.7 - 0.9 ( {q1} - {q2} )'
+            else:
+                return f'Quantile 0.9 - 1 ( {q2} - inf )'
+
+        data_for_proba["target"] = data_for_proba["target"].apply(f)
 
         bn = BayesianNetwork(graph)
         bn = bn.fit_node_states(data_for_proba)
@@ -406,6 +375,12 @@ class CausalAnalyser_v2():
         bn = bn.fit_cpds(data_for_proba, method="BayesianEstimator", bayes_prior="K2")
         ie = InferenceEngine(bn)
 
-        probas_table = bn.cpds['target']
+        probas_table = bn.cpds['target'].transpose().sort_index()
+        probas_table_rescale = probas_table.copy()
+        probas_table_rescale[f'Quantile 0 - 0.7 ( 0 - {q1} )'] = probas_table_rescale[f'Quantile 0 - 0.7 ( 0 - {q1} )'] / 0.7
+        probas_table_rescale[f'Quantile 0.7 - 0.9 ( {q1} - {q2} )'] = probas_table_rescale[
+                                                                     f'Quantile 0.7 - 0.9 ( {q1} - {q2} )'] / 0.2
+        probas_table_rescale[f'Quantile 0.9 - 1 ( {q2} - inf )'] = probas_table_rescale[
+                                                                          f'Quantile 0.9 - 1 ( {q2} - inf )'] / 0.1
 
-        return fig, ie, probas_table
+        return fig, ie, probas_table, probas_table_rescale
