@@ -13,6 +13,11 @@ from numpy import argmax
 import seaborn as sns
 import numpy as np
 import plotly.express as px
+from imblearn.over_sampling import SMOTE, ADASYN
+from bayes_opt import BayesianOptimization
+import xgboost as xgb
+from xgboost import XGBClassifier
+from io import BytesIO
 
 
 def plot_confusion_matrix(y_true, y_pred, class_names, normalize=None,
@@ -45,6 +50,9 @@ def app():
                          step=0.01)
     choices = list(set.union({'- Select All'}, possibles_groups))
     features = st.sidebar.multiselect("Possible Causes (features of ML model)", choices)
+
+    model = st.sidebar.radio('Select a Model', ['Decision Tree', 'XG Boost'])
+
     if (len(features) > 0) and (len(target) > 0):
         target = target[0]
         if (features[0] == '- Select All') :
@@ -61,26 +69,88 @@ def app():
 
         y = le.fit_transform(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=2)
-        tree_reg = DecisionTreeClassifier(max_depth=4, min_samples_leaf=10, random_state=1)
-        tree_reg.fit(X_train, y_train)
-        y_pred = tree_reg.predict(X_test)
+
+        resample = st.sidebar.radio('Resampling (with ASADYN)', ('Yes','No'))
+        if resample == 'Yes':
+            X_train, y_train = ADASYN().fit_resample(X_train, y_train)
+
+        if model == 'Decision Tree':
+            classifier = DecisionTreeClassifier(max_depth=4, min_samples_leaf=10, random_state=1)
+            classifier.fit(X_train, y_train)
+            y_pred = classifier.predict(X_test)
+
+            fig2 = tree.export_graphviz(classifier, out_file=None, filled=True, feature_names=X.columns, rotate=True)
+            st.write('🌳 Decision Tree ')
+            st.graphviz_chart(fig2)
+
+
+        if model == 'XG Boost':
+
+            # Converting the dataframe into XGBoost’s Dmatrix object
+            dtrain = xgb.DMatrix(X_train, label = y_train)
+
+            # Bayesian Optimization function for xgboost
+            # specify the parameters you want to tune as keyword arguments
+            def bo_tune_xgb(max_depth, gamma, n_estimators, learning_rate):
+                params = {'max_depth': int(max_depth),
+                          'gamma': gamma,
+                          'n_estimators': int(n_estimators),
+                          'learning_rate': learning_rate,
+                          'subsample': 0.8,
+                          'eta': 0.1,
+                          'eval_metric': 'rmse'}
+                # Cross validating with the specified parameters in 5 folds and 70 iterations
+                cv_result = xgb.cv(params, dtrain, num_boost_round=70, nfold=5, metrics="auc", stratified=True)
+                # Return the negative RMSE
+                return -1.0 * cv_result['test-auc-mean'].iloc[-1]
+
+            # Invoking the Bayesian Optimizer with the specified parameters to tune
+            xgb_bo = BayesianOptimization(bo_tune_xgb, {'max_depth': (3, 5),
+                                                        'gamma': (0.05, 1),
+                                                        'learning_rate': (0.05, 0.8),
+                                                        'n_estimators': (100, 120)
+                                                        })
+
+            # performing Bayesian optimization for 5 iterations with 8 steps of random exploration with an #acquisition function of expected improvement
+            xgb_bo.maximize(n_iter=5, init_points=8, acq='ei')
+            # Extracting the best parameters
+            params = xgb_bo.max['params']
+            # Converting the max_depth and n_estimator values from float to int
+            params['max_depth'] = int(params['max_depth'])
+            params['n_estimators'] = int(params['n_estimators'])
+            st.write('** Best Params : **')
+            st.write(params)
+
+            ### RMSE Curve with best params
+            st.write('Loss Curve among Iterations')
+            cv_results = xgb.cv(params, dtrain, num_boost_round=70, nfold=5, metrics=["rmse", "auc"])
+            width = st.sidebar.slider("plot width", 1, 25, 3)
+            height = st.sidebar.slider("plot height", 1, 25, 1)
+            fig, ax = plt.subplots(figsize=(width, height))
+            ax.plot(cv_results['train-rmse-mean'])
+            ax.plot(cv_results['test-rmse-mean'])
+            buf = BytesIO()
+            fig.savefig(buf, format="png")
+            st.image(buf)
+
+            ## Predict
+            classifier = XGBClassifier(**params, objective='binary:logistic', eval_metric="auc").fit(X_train, y_train)
+            y_pred = classifier.predict(X_test)
+            # Looking at the classification report
+            #st.write(classification_report(y_pred_xgb, y_test))
 
         st.write(" 🏋 Features Importance")
-        feat_importances = pd.DataFrame(tree_reg.feature_importances_, index=X_test.columns,
+        feat_importances = pd.DataFrame(classifier.feature_importances_, index=X_test.columns,
                                         columns=['Feature Importance'])
 
         fig2 = px.bar(feat_importances.reset_index(), x='index', y='Feature Importance',
                       color='Feature Importance', height=400).update_xaxes(categoryorder="total descending")
         st.plotly_chart(fig2, use_container_width=True)
 
-        fig2 = tree.export_graphviz(tree_reg, out_file=None, filled=True, feature_names=X.columns, rotate=True)
-        st.write('🌳 Decision Tree ')
-        st.graphviz_chart(fig2)
-
         st.markdown(" ❌⭕ **Confusion Matrix and Classification Metrics**")
         fig = plt.figure()
         fig = plot_confusion_matrix(y_test, y_pred, [0, 1])
-        y_probas = tree_reg.predict_proba(X_test)[:, 1]
+        y_probas = classifier.predict_proba(X_test)[:, 1]
         precision, recall, thresholds = precision_recall_curve(y_test, y_probas)
 
         fig1 = plt.figure()
@@ -99,7 +169,7 @@ def app():
         st.markdown(" **Changing Probability Score**")
         score = 2*(precision * recall) / (precision + recall)  ## Score pour trouver le meilleur compromis
         # locate the index of the largest  score
-        ix = argmax(score)
+        ix = argmax(score) - 1
         st.markdown('Best Threshold=%f, Score=%.3f' % (thresholds[ix], score[ix]))
         y_pred2 = [1 if x >= thresholds[ix] else 0 for x in list(y_probas)]
 

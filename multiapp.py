@@ -41,8 +41,8 @@ class MultiApp:
     def run(self):
 
         app = st.selectbox(
-            ' ',
+            '🧐 Select a page to run ⚠️You need to upload data first',
             self.apps,
             format_func=lambda app: app['title'])
-
+        st.write('-------------------------------------------------------------------------------------------')
         app['function']()

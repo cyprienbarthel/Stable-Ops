@@ -1,6 +1,6 @@
 import streamlit as st
 import shared_dataset
-
+import seaborn as sns
 import sys
 sys.path.append('.')
 from Stable_Ops_Functions import StabAnalyser, CausalAnalyser, CausalAnalyser_v2
@@ -27,5 +27,14 @@ def app():
         st.plotly_chart(fig2, use_container_width=True)
         st.plotly_chart(fig1, use_container_width=True)
 
+        st.markdown('##### T-test on whether sub groups have the same mean ')
+        st.markdown('We test the null hypothesis **Ho** : *The two subgroups have the same mean*')
+        st.markdown("If the p-value of the t-test is < 0.05, we reject Ho with a risk of failure of 5% \
+                    Else, we don't reject Ho (but we cannot say if Ho is true)")
+
+        df_tests = Stab_analyser.mean_hypothesis_test(group_variable, target, int_val)
+
+        cm = sns.light_palette("green", as_cmap=True)
+        st.dataframe(df_tests.style.background_gradient(cmap=cm, low=.5, high=0))#.highlight_null('red'))
     else:
         pass

@@ -25,6 +25,7 @@ from causalnex.structure import DAGRegressor
 
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import KFold
+from itertools import combinations
 
 
 
@@ -80,6 +81,34 @@ class StabAnalyser():
     def group_scatter(self, group_col, val_col, y_axis):
         fig = px.scatter(self.data, x=val_col, y=y_axis, facet_col=group_col, trendline="ols")
         fig.show()
+
+    def mean_hypothesis_test(self, group_col, val_col, high_limit):
+        data_to_use = self.data.copy()
+        data_to_use = data_to_use[(data_to_use[val_col] < high_limit) & (data_to_use[val_col] > 0)]
+
+        if group_col == group_col:
+            data_to_use = data_to_use[~data_to_use[group_col].isna()]
+            data_to_use[group_col] = data_to_use[group_col].apply(str)
+            tmp = data_to_use.groupby(group_col).agg({val_col: list})
+            tmp = tmp.reset_index()
+            tmp['len'] = tmp[val_col].apply(len)
+            tmp = tmp[tmp['len'] > 10]
+            hist_data = tmp[val_col].values.tolist()
+            group_labels = tmp[group_col].values.tolist()  # name of the datasets
+
+        def ttest_run(c1, c2, name1, name2):
+            results = stats.ttest_ind(c1, c2, equal_var=False)
+            df = pd.DataFrame({'Group 1': name1,
+                               'Group 2': name2,
+                               't-stat': round(results.statistic,3),
+                               'p-value': round(results.pvalue,3), 'Ho Rejected': results.pvalue < 0.05},
+                              index=[0])
+            return df
+
+        df_list = [ttest_run(tmp.loc[i][val_col], tmp.loc[j][val_col],
+                             tmp.loc[i][group_col], tmp.loc[j][group_col]) for i, j in combinations(tmp.index, 2)]
+        final_df = pd.concat(df_list, ignore_index=True)
+        return final_df
 
     def histogram_plot(self, val_col):
 
@@ -157,7 +186,7 @@ class StabAnalyser():
 
         plt.title('Probability Plot Fit')
         #plt.show()
-        return fig, fig2, squared_estimate_errors, aic, dist_params
+        return fig, fig2, squared_estimate_errors, aic, dist_params,dist_
 
 
 class CausalAnalyser():

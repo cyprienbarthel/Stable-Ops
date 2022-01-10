@@ -81,7 +81,7 @@ def app():
         law = dico_dist[law]
         if st.button(' ✅ Fit Distribution'):
 
-            fig1, fig2, squared_estimate_errors, aic, dist_params = Stab_analyser2.fit_stat_law(TS_to_Analyse, law)
+            fig1, fig2, squared_estimate_errors, aic, dist_params,dist_ = Stab_analyser2.fit_stat_law(TS_to_Analyse, law)
             col1, col2 = st.columns(2)
             with col1:
                 st.pyplot(fig1, use_container_width=True)
@@ -90,7 +90,8 @@ def app():
 
             st.markdown(f'AIC {aic}')
             st.markdown(f'RMSE {squared_estimate_errors}')
-            st.dataframe(pd.DataFrame.from_dict(dist_params).rename(columns={0:'Params'}))
+            st.dataframe(pd.DataFrame.from_dict({'mean':[dist_.mean()],'std':[dist_.std()], 'median':[dist_.median()]}.\
+                         transpose()).rename(columns={0:'Params'}))
 
 
 
